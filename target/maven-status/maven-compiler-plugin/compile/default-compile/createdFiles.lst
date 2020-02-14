@@ -1,2 +1,6 @@
-com\vaadin\MyUI.class
+com\vaadin\WorkflowService.class
+com\vaadin\Db.class
 com\vaadin\MyUI$MyUIServlet.class
+com\vaadin\MyUI.class
+com\vaadin\Status.class
+com\vaadin\Workflow.class
