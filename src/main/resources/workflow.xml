@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:tns="http://www.jboss.org/drools" xmlns:xs="http://www.w3.org/2001/XMLSchema-instance" expressionLanguage="http://www.mvel.org/2.0" id="Definition" targetNamespace="http://www.example.org/MinimalExample" typeLanguage="http://www.java.com/javaTypes" xs:schemaLocation="http://www.omg.org/spec/BPMN/20100524/MODEL BPMN20.xsd">
+  <process id="_75" isExecutable="true" name="Approval TimeSheets Supervisor" processType="Private">
+    <startEvent id="_13" name="Open for employee"/>
+    <scriptTask id="_14" name="Approved By Employee"/>
+    <scriptTask id="_15" name="Approved by Sup"/>
+    <scriptTask id="_16" name="Approved by next Sup"/>
+    <endEvent id="_17" name="Closed TimeSheet">
+      <terminateEventDefinition/>
+    </endEvent>
+    <sequenceFlow id="_13-14" sourceRef="_13" targetRef="_14"/>
+    <sequenceFlow id="_14-13" sourceRef="_14" targetRef="_13"/>
+    <sequenceFlow id="_14-15" sourceRef="_14" targetRef="_15"/>
+    <sequenceFlow id="_14-16" sourceRef="_14" targetRef="_16"/>
+    <sequenceFlow id="_15-13" sourceRef="_15" targetRef="_13"/>
+    <sequenceFlow id="_15-16" sourceRef="_15" targetRef="_16"/>
+    <sequenceFlow id="_16-13" sourceRef="_16" targetRef="_13"/>
+    <sequenceFlow id="_16-17" sourceRef="_16" targetRef="_17"/>
+  </process>
+</definitions>

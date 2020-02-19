@@ -28,4 +28,6 @@ public class Workflow {
     public List<Status> getStatuses() {
         return statuses;
     }
+
+    public int getStatusesSize() { return statuses.size(); }
 }

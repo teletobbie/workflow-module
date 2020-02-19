@@ -23,19 +23,20 @@ import java.util.ArrayList;
 @Theme("mytheme")
 public class MyUI extends UI {
     private WorkflowService workflowService = WorkflowService.getInstance();
-    private Grid<Workflow> grid = new Grid<>(Workflow.class);
     private Workflow workFlow = new Workflow(0, "", new ArrayList<>());
 
     @Override
     protected void init(VaadinRequest vaadinRequest) {
         final VerticalLayout layout = new VerticalLayout();
         Binder<Workflow> binder = new Binder<>();
+        final Grid<Status> grid = new Grid<>(Status.class);
         
         final TextField processIdField = new TextField();
         processIdField.setCaption("Enter a process number here:");
 
         binder.forField(processIdField)
                 .withConverter(new StringToIntegerConverter("Must be a number"))
+                .withNullRepresentation(0)
                 .bind(Workflow::getId, Workflow::setId);
 
         binder.readBean(workFlow);
@@ -45,11 +46,18 @@ public class MyUI extends UI {
         button.addClickListener( e -> {
             try {
                 workFlow = workflowService.getWorkflow(Integer.parseInt(processIdField.getValue()));
-                binder.writeBean(workFlow);
+                if (workFlow != null) {
+                    workflowService.createXML(workFlow);
+                    binder.writeBean(workFlow);
+                    layout.addComponent(new Label("process id " + workFlow.getId() + "\n Description " + workFlow.getProcessDescription()));
+                    grid.setItems(workFlow.getStatuses());
+                    layout.addComponent(grid);
+                } else {
+                    Notification.show("Workflow with " + processIdField.getValue() + " could not be found");
+                }
             } catch (ValidationException ve) {
                 Notification.show("Workflow with " + processIdField.getValue() + " could not be found");
             }
-            layout.addComponent(new Label("process id " + workFlow.getId() + " Description " + workFlow.getProcessDescription()));
         });
 
         layout.addComponents(processIdField, button);
