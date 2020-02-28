@@ -3,7 +3,6 @@ package com.vaadin;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
-import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
 
 import javax.xml.parsers.DocumentBuilder;
@@ -18,7 +17,10 @@ import javax.xml.transform.stream.StreamResult;
 import java.io.IOException;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -113,6 +115,19 @@ public class WorkflowService {
                 counter++;
             }
 
+//            List<Status> listOfStatusDuplicates = getDuplicatedStatuses(workflow.getStatuses());
+//            if(listOfStatusDuplicates.size() >= 2) {
+//                appendGateway(document, process, listOfStatusDuplicates);
+//            } else {
+//                for (Status status : workflow.getStatuses()) {
+//                    if (status.getNextStatusNumber() != 0) {
+//                        Element sequenceFlow = createSequence(document, status.getStatusNumber(),
+//                                status.getNextStatusNumber());
+//                        process.appendChild(sequenceFlow);
+//                    }
+//                }
+//            }
+
             for (Status status : workflow.getStatuses()) {
                 if (status.getNextStatusNumber() != 0) {
                     Element sequenceFlow = createSequence(document, status.getStatusNumber(),
@@ -136,7 +151,6 @@ public class WorkflowService {
         return node;
     }
 
-
     private Element createSequence(Document document, int statusNumber, int nextStatusNumber) {
         //sequenceFlow are the connection points to the different nodes.
         Element sequenceFlow = document.createElement("sequenceFlow");
@@ -144,6 +158,34 @@ public class WorkflowService {
         sequenceFlow.setAttribute("sourceRef", "_"+statusNumber);
         sequenceFlow.setAttribute("targetRef", "_"+nextStatusNumber);
         return sequenceFlow;
+    }
+
+    private Element createGatewaySequence(Document document, String gateWayId, int nextStatusNumber, String nextStatusDescription) {
+        Element sequenceConditionFlow = document.createElement("sequenceFlow");
+        sequenceConditionFlow.setAttribute("sourceRef", gateWayId);
+        sequenceConditionFlow.setAttribute("targetRef", "_"+nextStatusNumber);
+        sequenceConditionFlow.setAttribute("name", nextStatusDescription);
+        Element conditionExpression = document.createElement("conditionExpression");
+        conditionExpression.setAttribute("xsi:type", "tFormalExpression");
+        conditionExpression.setTextContent(nextStatusDescription);
+        sequenceConditionFlow.appendChild(conditionExpression);
+        return sequenceConditionFlow;
+    }
+
+    private Element createGateway(Document document, String statusDescription) {
+        Element gateway = document.createElement("exclusiveGateway");
+        gateway.setAttribute("id", statusDescription);
+        gateway.setAttribute("name", String.format("exclusive gateway %s", statusDescription));
+        return gateway;
+    }
+
+    private void appendGateway(Document document, Element parent, List<Status> statuses) {
+        Element gatewayFlow = createGateway(document, statuses.get(0).getStatusDescription());
+        parent.appendChild(gatewayFlow);
+        for (Status status : statuses) {
+            Element gatewaySequenceFlow = createGatewaySequence(document, status.getStatusDescription(), status.getNextStatusNumber(), status.getNextStatusDescription());
+            parent.appendChild(gatewaySequenceFlow);
+        }
     }
 
     private void transformXML(Document document) throws TransformerException {
@@ -174,6 +216,17 @@ public class WorkflowService {
                     .collect(Collectors.toList());
             return seen.putIfAbsent(keys, Boolean.TRUE) == null;
         };
+    }
+
+    private List<Status> getDuplicatedStatuses(List<Status> statusList) {
+        List<Status> result = new ArrayList<>();
+        for (int i = 0; i < statusList.size() - 1; i++) {
+            if(statusList.get(i).getStatusNumber() == statusList.get(i + 1).getStatusNumber()) {
+                result.add(statusList.get(i));
+                result.add(statusList.get(i + 1));
+            }
+        }
+        return result;
     }
 
 

@@ -23,6 +23,7 @@ import java.util.ArrayList;
 @Theme("mytheme")
 public class MyUI extends UI {
     private WorkflowService workflowService = WorkflowService.getInstance();
+    private BPMNModeller modeller;
     private Workflow workFlow = new Workflow(0, "", new ArrayList<>());
 
     @Override
@@ -47,7 +48,9 @@ public class MyUI extends UI {
             try {
                 workFlow = workflowService.getWorkflow(Integer.parseInt(processIdField.getValue()));
                 if (workFlow != null) {
-                    workflowService.createXML(workFlow);
+                    //workflowService.createXML(workFlow);
+                    modeller = new BPMNModeller(workFlow);
+                    modeller.createModel();
                     binder.writeBean(workFlow);
                     layout.addComponent(new Label("process id " + workFlow.getId() + "\n Description " + workFlow.getProcessDescription()));
                     grid.setItems(workFlow.getStatuses());
