@@ -32,7 +32,7 @@ public class BPMNModeller {
 
     public void createModel() {
         initializeModel();
-        createProcess();
+        createProcess(); //create process
         initializeSequenceFlows(process);
         writeModel(workflow.getProcessDescription().replace(" ", "_"));
     }
@@ -53,52 +53,71 @@ public class BPMNModeller {
 
         for (Status status : statusList) {
             if (counter == 0) {
-                StartEvent startEvent = createElement(process, "_"+status.getStatusNumber(), StartEvent.class);
+                StartEvent startEvent = createElement(process, "_" + status.getStatusNumber(), StartEvent.class);
                 startEvent.setName(status.getStatusDescription());
-                statusSequence.put(status.getStatusNumber(),  new ArrayList<>(Collections.emptyList()));
+                statusSequence.put(status.getStatusNumber(), new ArrayList<>(Collections.emptyList()));
             } else if (counter == statusList.size() - 1 || status.getNextStatusNumber() == 0) {
-                EndEvent endEvent = createElement(process, "_"+status.getStatusNumber(), EndEvent.class);
+                EndEvent endEvent = createElement(process, "_" + status.getStatusNumber(), EndEvent.class);
                 endEvent.setName(status.getStatusDescription());
-                statusSequence.put(status.getStatusNumber(),  new ArrayList<>(Collections.emptyList()));
-            } else if (status.getStatusNumber() == statusList.get(counter + 1).getStatusNumber()) {
-                Status secondConditionalStatus = statusList.get(counter + 1);
-                createElement(process, "_"+status.getStatusNumber()+"||"+secondConditionalStatus.getStatusNumber(), ExclusiveGateway.class);
+                statusSequence.put(status.getStatusNumber(), new ArrayList<>(Collections.emptyList()));
             } else {
-                UserTask task = createElement(process, "_"+status.getStatusNumber(), UserTask.class);
+                UserTask task = createElement(process, "_" + status.getStatusNumber(), UserTask.class);
                 task.setName(status.getStatusDescription());
-                statusSequence.put(status.getStatusNumber(),  new ArrayList<>(Collections.emptyList()));
+                statusSequence.put(status.getStatusNumber(), new ArrayList<>(Collections.emptyList()));
             }
             counter++;
         }
 
+        updateStatusSequence();
+
+        statusSequence.forEach((k, v) -> System.out.println(k + " " + v));
+
     }
 
-    private void initializeSequenceFlows(Process process) {
+    private void updateStatusSequence() {
         for (Status status : workflow.getStatuses()) {
             for (FlowElement flowElement : process.getFlowElements()) {
-                int id = Integer.parseInt(flowElement.getId().substring(1));
+                int id = Integer.parseInt(flowElement.getId().replaceAll("\\D+", ""));
                 if (status.getNextStatusNumber() == id) {
                     List<Object> updatedNextStatuses = statusSequence.get(status.getStatusNumber());
                     updatedNextStatuses.add(flowElement);
+                    if (updatedNextStatuses.size() >= 2 && updatedNextStatuses.stream().noneMatch(o -> o instanceof ExclusiveGateway)) {
+                        ExclusiveGateway exclusiveGateway = createElement(process, "_" + status.getStatusNumber() + "_gateway", ExclusiveGateway.class);
+                        exclusiveGateway.setName(status.getStatusDescription() + " gateway");
+                        System.out.println("gateway created named " + exclusiveGateway.getName() + "with id " + exclusiveGateway.getId());
+                        updatedNextStatuses.add(exclusiveGateway);
+                    }
                     statusSequence.replace(status.getStatusNumber(), updatedNextStatuses);
                 }
             }
         }
-        process.getFlowElements().forEach(System.out::println);
-        statusSequence.forEach((k, v) -> System.out.println(k + " " + v));
+    }
 
+    private void initializeSequenceFlows(Process process) {
         for (FlowElement from : process.getFlowElements()) {
-            int id = Integer.parseInt(from.getId().substring(1));
+            int id = Integer.parseInt(from.getId().replaceAll("\\D+", ""));
             List<Object> nextStatuses = statusSequence.get(id);
-            for (Object to : nextStatuses) { 
-                if(from instanceof StartEvent && to instanceof UserTask) {
-                    createSequenceFlow(process, (StartEvent)from, (UserTask)to);
+            for (Object to : nextStatuses) {
+                if (from instanceof StartEvent && to instanceof UserTask) {
+                    createSequenceFlow(process, (StartEvent) from, (UserTask) to);
                 } else if (from instanceof UserTask && to instanceof StartEvent) {
-                    createSequenceFlow(process, (UserTask)from, (StartEvent)to);
+                    createSequenceFlow(process, (UserTask) from, (StartEvent) to);
+                } else if (from instanceof StartEvent && to instanceof ExclusiveGateway) {
+                    createSequenceFlow(process, (StartEvent) from, (ExclusiveGateway) to);
+                } else if (from instanceof ExclusiveGateway && to instanceof StartEvent) {
+                    createSequenceFlow(process, (ExclusiveGateway) from, (StartEvent) to);
+                } else if (from instanceof EndEvent && to instanceof ExclusiveGateway) {
+                    createSequenceFlow(process, (EndEvent) from, (ExclusiveGateway) to);
+                } else if (from instanceof ExclusiveGateway && from instanceof EndEvent) {
+                    createSequenceFlow(process, (ExclusiveGateway) from, (EndEvent) to);
                 } else if (from instanceof UserTask && to instanceof EndEvent) {
-                    createSequenceFlow(process, (UserTask)from, (EndEvent)to);
+                    createSequenceFlow(process, (UserTask) from, (EndEvent) to);
                 } else if (from instanceof UserTask && to instanceof UserTask) {
-                    createSequenceFlow(process, (UserTask)from, (UserTask)to);
+                    createSequenceFlow(process, (UserTask) from, (UserTask) to);
+                } else if (from instanceof UserTask && to instanceof ExclusiveGateway) {
+                    createSequenceFlow(process, (UserTask) from, (ExclusiveGateway) to);
+                } else if (from instanceof ExclusiveGateway && to instanceof UserTask) {
+                    createSequenceFlow(process, (ExclusiveGateway) from, (UserTask) to);
                 }
             }
         }
@@ -138,6 +157,7 @@ public class BPMNModeller {
 
     /**
      * method to create sequence flow
+     *
      * @param process
      * @param from
      * @param to
