@@ -1,13 +1,15 @@
 package com.vaadin;
 
 
+import elemental.json.impl.JsonUtil;
 import org.camunda.bpm.model.bpmn.Bpmn;
 import org.camunda.bpm.model.bpmn.BpmnModelInstance;
 import org.camunda.bpm.model.bpmn.instance.Process;
 import org.camunda.bpm.model.bpmn.instance.*;
 
-import java.io.File;
-import java.io.IOException;
+import java.io.*;
+import java.nio.Buffer;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -19,12 +21,12 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class BPMNModeller {
+    private final String path = "src/main/resources/";
     private Workflow workflow;
     private BpmnModelInstance modelInstance;
     private Definitions definitions;
     private Process process;
     private HashMap<Integer, List<Object>> statusSequence = new HashMap<>();
-
 
     public BPMNModeller(Workflow workflow) {
         this.workflow = workflow;
@@ -35,6 +37,26 @@ public class BPMNModeller {
         createProcess(); //create process
         initializeSequenceFlows(process);
         writeModel(workflow.getProcessDescription().replace(" ", "_"));
+    }
+
+    public File getModelFile() {
+        File file = new File(path);
+        File[] matchingFiles = file.listFiles((dir, name) ->
+                name.startsWith(workflow.getProcessDescription().replace(" ", "_"))
+                        && name.endsWith(".xml"));
+        //TODO fix null pointer exception
+        return matchingFiles[0];
+    }
+
+    public String getModelFileContent() {
+        StringBuilder contents = new StringBuilder();
+        File file = getModelFile();
+        try (Stream<String> stream = Files.lines(Paths.get(file.getPath()), StandardCharsets.UTF_8)) {
+            stream.forEach(s -> contents.append(s).append("\n"));
+        } catch (IOException io) {
+            io.printStackTrace();
+        }
+        return contents.toString();
     }
 
     private void initializeModel() {
@@ -70,7 +92,6 @@ public class BPMNModeller {
 
         updateStatusSequence();
 
-        statusSequence.forEach((k, v) -> System.out.println(k + " " + v));
 
     }
 
@@ -124,7 +145,6 @@ public class BPMNModeller {
     }
 
     private void writeModel(String modelName) {
-        String path = "src/main/resources/";
         Bpmn.validateModel(modelInstance);
         try {
             Stream<Path> walk = Files.walk(Paths.get(path));
