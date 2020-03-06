@@ -29,5 +29,14 @@ public class Workflow {
         return statuses;
     }
 
+    public Status getStatusById(int statusId) {
+        for (Status status : statuses) {
+            if(status.getStatusNumber() == statusId) {
+                return status;
+            }
+        }
+        return null;
+    }
+
     public int getStatusesSize() { return statuses.size(); }
 }
