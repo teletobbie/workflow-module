@@ -72,10 +72,6 @@ public class MyUI extends UI {
                 content.setSizeFull();
                 layout.addComponents(grid, content);
 
-//                BPMNComponent bpmnComponent = new BPMNComponent();
-//                System.out.println(bpmnComponent);
-//                String xml = modeller.getModelFileContent();
-//                File file = new File("src/main/resources/munsterprocess.bpmn");
                 renderBPMNDiagram();
             } else {
                 Notification.show("Workflow with " + processIdField.getValue() + " could not be found");
@@ -86,8 +82,6 @@ public class MyUI extends UI {
     }
 
     private void renderBPMNDiagram() {
-//        final BPMNComponent bpmnComponent = new BPMNComponent();
-//        bpmnComponent.setId("Diagram");
         com.vaadin.ui.JavaScript.getCurrent().execute("" +
                 "var diagramUrl = 'https://cdn.staticaly.com/gh/bpmn-io/bpmn-js-examples/dfceecba/starter/diagram.bpmn';\n" +
                 "console.warn(diagramUrl);" +
@@ -106,8 +100,6 @@ public class MyUI extends UI {
                 "      }\n" +
                 "      $.get(diagramUrl, openDiagram, 'text');");
     }
-
-
 
 
     @WebServlet(urlPatterns = "/*", name = "MyUIServlet", asyncSupported = true)

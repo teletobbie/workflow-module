@@ -7,7 +7,8 @@ public class Database {
 
     public void start() {
         try {
-            String url = "jdbc:mysql://localhost:3306/rainbow";
+            String serverTimezone = "?serverTimezone=UTC"; //needs to be configured because mysql only works with UTC timezone
+            String url = "jdbc:mysql://localhost:3306/rainbow"+ serverTimezone;
             String username = "root";
             String password = "root";
             Class.forName("com.mysql.jdbc.Driver");
