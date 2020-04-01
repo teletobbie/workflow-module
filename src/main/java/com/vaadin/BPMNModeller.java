@@ -1,6 +1,7 @@
 package com.vaadin;
 
 
+
 import org.activiti.bpmn.BpmnAutoLayout;
 import org.activiti.bpmn.converter.BpmnXMLConverter;
 import org.activiti.bpmn.model.Process;
@@ -8,12 +9,11 @@ import org.activiti.bpmn.model.*;
 import org.activiti.engine.ProcessEngine;
 import org.activiti.engine.ProcessEngineConfiguration;
 import org.apache.commons.io.FileUtils;
+import org.apache.ibatis.javassist.tools.rmi.ObjectNotFoundException;
 
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.*;
@@ -65,15 +65,20 @@ public class BPMNModeller {
         for (Status status : statusList) {
             long count = countSameStatuses.get(status.getStatusNumber());
             if(isStartEvent(status.getStatusNumber())) {
-                StartEvent startEvent = createStartEvent(status.getStatusNumber(), status.getStatusDescription());
+                StartEvent startEvent = createStartEvent();
+                UserTask startTask = createUserTask(status.getStatusNumber(), String.format("%s. %s", status.getStatusNumber(), status.getStatusDescription()));
                 process.addFlowElement(startEvent);
-                statusSequence.put(status.getStatusNumber(), new ArrayList<>(Collections.emptyList()));
+                process.addFlowElement(startTask);
+                statusSequence.put(status.getStatusNumber(), new ArrayList<>(Arrays.asList(startEvent, startTask)));
             } else if (status.getNextStatusNumber() == 0) {
-                EndEvent endEvent = createEndEvent(status.getStatusNumber(), status.getStatusDescription());
+                EndEvent endEvent = createEndEvent();
+                UserTask endTask = createUserTask(status.getStatusNumber(), String.format("%s. %s", status.getStatusNumber(), status.getStatusDescription()));
                 process.addFlowElement(endEvent);
-                statusSequence.put(status.getStatusNumber(), new ArrayList<>(Collections.emptyList()));
+                process.addFlowElement(endTask);
+                statusSequence.put(status.getStatusNumber(), new ArrayList<>(Arrays.asList(endTask, endEvent)));
             } else {
-                UserTask userTask = createUserTask(status.getStatusNumber(), status.getStatusDescription());
+                UserTask userTask = createUserTask(status.getStatusNumber(),
+                        String.format("%s. %s", status.getStatusNumber(), status.getStatusDescription()));
                 process.addFlowElement(userTask);
                 statusSequence.put(status.getStatusNumber(), new ArrayList<>(Collections.emptyList()));
             }
@@ -87,83 +92,82 @@ public class BPMNModeller {
             }
         }
         updateSequenceMap();
-        System.out.println(statusSequence);
+
 
 
     }
 
     private void createSequences() {
-        //1. loop de sequencemap values
-        //2. loop over de process.flowelements
-        //3.
         List<SequenceFlow> sequenceFlows = new ArrayList<>(); //list of incoming sequenceflows
+        System.out.println(statusSequence);
+        for (Map.Entry<Integer, List<Object>> flowEntry : statusSequence.entrySet()) {
+            FlowElement from = process.getFlowElement(Integer.toString(flowEntry.getKey()));
+            List<Object> next_statuses = flowEntry.getValue();
+            if(containsExclusiveGateway(next_statuses)) {
+                try {
+                    ExclusiveGateway toExclusiveGateway = (ExclusiveGateway)next_statuses.stream()
+                            .filter(o -> o.getClass() == ExclusiveGateway.class)
+                            .findAny().orElseThrow(() -> new ObjectNotFoundException("No exclusive gateway could be found"));
+                    SequenceFlow sequenceFlowFromToExGw = createSequenceFlow(from.getId(), toExclusiveGateway.getId());
+                    sequenceFlows.add(sequenceFlowFromToExGw);
+                    addOutGoingFlow(from, sequenceFlowFromToExGw); //from outgoing flow
 
-        for (FlowElement from : process.getFlowElements()) {
-            int id = Integer.parseInt(from.getId().replaceAll("\\D+", ""));
-            List<Object> nextStatuses = statusSequence.get(id);
-
-            for (Object to : nextStatuses) {
-                if (from instanceof StartEvent && to instanceof UserTask) {
-                    SequenceFlow flow = createSequenceFlow(from.getId(), ((UserTask) to).getId());
-                    sequenceFlows.add(flow);
-                    List<SequenceFlow> startEventOutgoingFlows = new ArrayList<>();
-                    startEventOutgoingFlows.add(flow);
-                    ((StartEvent) from).setOutgoingFlows(startEventOutgoingFlows);
-                } else if (from instanceof UserTask && to instanceof StartEvent) {
-                    SequenceFlow flow = createSequenceFlow(from.getId(), ((StartEvent) to).getId());
-                    sequenceFlows.add(flow);
-                    List<SequenceFlow> userTaskOutgoingFlows = new ArrayList<>();
-                    userTaskOutgoingFlows.add(flow);
-                    ((UserTask) from).setOutgoingFlows(userTaskOutgoingFlows);
-                } else if (from instanceof StartEvent && to instanceof ExclusiveGateway) {
-                    SequenceFlow flow = createSequenceFlow(from.getId(), ((ExclusiveGateway) to).getId());
-                    sequenceFlows.add(flow);
-                    List<SequenceFlow> startEventOutgoingFlows = new ArrayList<>();
-                    startEventOutgoingFlows.add(flow);
-                    ((StartEvent) from).setOutgoingFlows(startEventOutgoingFlows);
-                } else if (from instanceof ExclusiveGateway && to instanceof StartEvent) {
-                    SequenceFlow flow = createSequenceFlow(from.getId(), ((StartEvent) to).getId());
-                    sequenceFlows.add(flow);
+                    //set outgoing flows for gateway
                     List<SequenceFlow> gatewayOutgoingFlows = new ArrayList<>();
-                    gatewayOutgoingFlows.add(flow);
-                    ((ExclusiveGateway) from).setOutgoingFlows(gatewayOutgoingFlows);
-                } else if (from instanceof EndEvent && to instanceof ExclusiveGateway) {
-                    SequenceFlow flow = createSequenceFlow(from.getId(), ((ExclusiveGateway) to).getId());
-                    sequenceFlows.add(flow);
-                    List<SequenceFlow> endEventOutgoingFlows = new ArrayList<>();
-                    endEventOutgoingFlows.add(flow);
-                    ((EndEvent) from).setOutgoingFlows(endEventOutgoingFlows);
-                } else if (from instanceof ExclusiveGateway && to instanceof EndEvent) {
-                    SequenceFlow flow = createSequenceFlow(from.getId(), ((EndEvent) to).getId());
-                    sequenceFlows.add(flow);
-                    List<SequenceFlow> gatewayOutgoingFlows = new ArrayList<>();
-                    gatewayOutgoingFlows.add(flow);
-                    ((ExclusiveGateway) from).setOutgoingFlows(gatewayOutgoingFlows);
-                } else if (from instanceof UserTask && to instanceof EndEvent) {
-                    SequenceFlow flow = createSequenceFlow(from.getId(), ((EndEvent) to).getId());
-                    sequenceFlows.add(flow);
-                    List<SequenceFlow> userTaskOutgoingFlows = new ArrayList<>();
-                    userTaskOutgoingFlows.add(flow);
-                    ((UserTask) from).setOutgoingFlows(userTaskOutgoingFlows);
-                } else if (from instanceof UserTask && to instanceof UserTask) {
-                    SequenceFlow flow = createSequenceFlow(from.getId(), ((UserTask) to).getId());
-                    sequenceFlows.add(flow);
-                    List<SequenceFlow> userTaskOutgoingFlows = new ArrayList<>();
-                    userTaskOutgoingFlows.add(flow);
-                    ((UserTask) from).setOutgoingFlows(userTaskOutgoingFlows);
-                } else if (from instanceof UserTask && to instanceof ExclusiveGateway) {
-                    SequenceFlow flow = createSequenceFlow(from.getId(), ((ExclusiveGateway) to).getId());
-                    sequenceFlows.add(flow);
-                    List<SequenceFlow> userTaskOutgoingFlows = new ArrayList<>();
-                    userTaskOutgoingFlows.add(flow);
-                    ((UserTask) from).setOutgoingFlows(userTaskOutgoingFlows);
-                } else if (from instanceof ExclusiveGateway && to instanceof UserTask) {
-                    SequenceFlow flow = createSequenceFlow(from.getId(), ((UserTask) to).getId());
-                    sequenceFlows.add(flow);
-                    List<SequenceFlow> gatewayOutgoingFlows = new ArrayList<>();
-                    gatewayOutgoingFlows.add(flow);
-                    ((ExclusiveGateway) from).setOutgoingFlows(gatewayOutgoingFlows);
+                    next_statuses.stream()
+                            .filter(x -> !x.equals(toExclusiveGateway))
+                            .collect(Collectors.toList())
+                            .forEach(o -> {
+                                FlowElement flowElement = (FlowElement) o;
+                                SequenceFlow sequenceFlowExGwToUserTask = createSequenceFlow(toExclusiveGateway.getId(), flowElement.getId());
+                                sequenceFlows.add(sequenceFlowExGwToUserTask);
+                                gatewayOutgoingFlows.add(sequenceFlowExGwToUserTask);
+                            });
+                    toExclusiveGateway.setOutgoingFlows(gatewayOutgoingFlows);
+                } catch (ObjectNotFoundException e) {
+                    e.printStackTrace();
                 }
+            } else if (containsStartEvent(next_statuses)) {
+                try {
+                    StartEvent startEvent = (StartEvent) next_statuses.stream()
+                            .filter(o -> o.getClass() == StartEvent.class)
+                            .findAny()
+                            .orElseThrow(() -> new ObjectNotFoundException("No startevent could be found in this list"));
+                    SequenceFlow sequenceFlowStartEventToFirstEvent = createSequenceFlow(startEvent.getId(), from.getId());//start event comes first
+                    sequenceFlows.add(sequenceFlowStartEventToFirstEvent);
+                    addOutGoingFlow(startEvent, sequenceFlowStartEventToFirstEvent);
+
+                    next_statuses.stream()
+                            .filter(x -> !x.equals(startEvent))
+                            .collect(Collectors.toList())
+                            .forEach(o -> {
+                                FlowElement flowElement = (FlowElement)o;
+                                SequenceFlow sequenceFlowFirstEventToNextEvent = createSequenceFlow(from.getId(), flowElement.getId());
+                                sequenceFlows.add(sequenceFlowFirstEventToNextEvent);
+                                addOutGoingFlow(from, sequenceFlowFirstEventToNextEvent);
+                            });
+                } catch (ObjectNotFoundException e) {
+                    e.printStackTrace();
+                }
+
+            } else if (containsEndEvent(next_statuses)) {
+                try {
+                    EndEvent endEvent = (EndEvent) next_statuses.stream()
+                            .filter(o -> o.getClass() == EndEvent.class)
+                            .findAny()
+                            .orElseThrow(() -> new ObjectNotFoundException("No endevent could be in this list"));
+                    SequenceFlow sequenceFlowUserTaskToEndEvent = createSequenceFlow(from.getId(), endEvent.getId());
+                    sequenceFlows.add(sequenceFlowUserTaskToEndEvent);
+                    addOutGoingFlow(from, sequenceFlowUserTaskToEndEvent);
+                } catch (ObjectNotFoundException e) {
+                    e.printStackTrace();
+                }
+            } else {
+                next_statuses.forEach(o -> {
+                    FlowElement flowElement = (FlowElement)o;
+                    SequenceFlow sequenceFlowFromToFlowElement = createSequenceFlow(from.getId(), flowElement.getId());
+                    addOutGoingFlow(from, sequenceFlowFromToFlowElement);
+                });
             }
         }
         addSequenceFlowsToProcess(sequenceFlows);
@@ -178,8 +182,8 @@ public class BPMNModeller {
     private void updateSequenceMap() {
         for (Status status : workflow.getStatuses()) {
             for (FlowElement flowElement : process.getFlowElements()) {
-                if(!flowElement.getId().contains("xg")) {
-                    int id = Integer.parseInt(flowElement.getId().replaceAll("\\D+", ""));
+                if(flowElement instanceof UserTask) {
+                    int id = Integer.parseInt(flowElement.getId());
                     if (status.getNextStatusNumber() == id) {
                         List<Object> updatedNextStatuses = statusSequence.get(status.getStatusNumber());
                         updatedNextStatuses.add(flowElement);
@@ -227,17 +231,17 @@ public class BPMNModeller {
         return flow;
     }
 
-    private StartEvent createStartEvent(int id, String name) {
+    private StartEvent createStartEvent() {
         StartEvent startEvent = new StartEvent();
-        startEvent.setId(Integer.toString(id));
-        startEvent.setName(name);
+        startEvent.setId("start");
+        startEvent.setName("start");
         return startEvent;
     }
 
-    private EndEvent createEndEvent(int id, String name) {
+    private EndEvent createEndEvent() {
         EndEvent endEvent = new EndEvent();
-        endEvent.setId(Integer.toString(id));
-        endEvent.setName(name);
+        endEvent.setId("end");
+        endEvent.setName("end");
         return endEvent;
     }
 
@@ -255,175 +259,17 @@ public class BPMNModeller {
         return exclusiveGateway;
     }
 
-
-//    public BPMNModeller(Workflow workflow) {
-//        this.workflow = workflow;
-//    }
-//
-//    public void createModel() {
-//
-//        initializeModel();
-//        createProcess(); //create process
-//        initializeSequenceFlows(process);
-//        writeModel(workflow.getProcessDescription().replace(" ", "_"));
-//    }
-//
-//    public File getModelFile() {
-//        File file = new File(path);
-//        File[] matchingFiles = file.listFiles((dir, name) ->
-//                name.startsWith(workflow.getProcessDescription().replace(" ", "_"))
-//                        && name.endsWith(".xml"));
-//        //TODO fix null pointer exception
-//        return matchingFiles[0];
-//    }
-//
-//    public String getModelFileContent() {
-//        StringBuilder contents = new StringBuilder();
-//        File file = getModelFile();
-//        try (Stream<String> stream = Files.lines(Paths.get(file.getPath()), StandardCharsets.UTF_8)) {
-//            stream.forEach(s -> contents.append(s).append("\n"));
-//        } catch (IOException io) {
-//            io.printStackTrace();
-//        }
-//        return contents.toString();
-//    }
-//
-//
-//    private void initializeModel() {
-//        modelInstance = Bpmn.createEmptyModel();
-//        definitions = modelInstance.newInstance(Definitions.class);
-//        definitions.setTargetNamespace(workflow.getProcessDescription());
-//        modelInstance.setDefinitions(definitions);
-//        process = createElement(definitions, workflow.getProcessDescription().replace(" ", "-"), Process.class);
-//    }
-//
-//    private void createProcess() {
-//        int counter = 0;
-//        List<Status> statusList = workflow.getStatuses().stream()
-//                .filter(distinctByKeys(Status::getStatusNumber, Status::getStatusDescription))
-//                .collect(Collectors.toList());
-//
-//        for (Status status : statusList) {
-//            if (counter == 0) {
-//                StartEvent startEvent = createElement(process, "_" + status.getStatusNumber(), StartEvent.class);
-//                startEvent.setName(status.getStatusDescription());
-//                statusSequence.put(status.getStatusNumber(), new ArrayList<>(Collections.emptyList()));
-//            } else if (counter == statusList.size() - 1 || status.getNextStatusNumber() == 0) {
-//                EndEvent endEvent = createElement(process, "_" + status.getStatusNumber(), EndEvent.class);
-//                endEvent.setName(status.getStatusDescription());
-//                statusSequence.put(status.getStatusNumber(), new ArrayList<>(Collections.emptyList()));
-//            } else {
-//                UserTask task = createElement(process, "_" + status.getStatusNumber(), UserTask.class);
-//                task.setName(status.getStatusDescription());
-//                statusSequence.put(status.getStatusNumber(), new ArrayList<>(Collections.emptyList()));
-//            }
-//            counter++;
-//        }
-//
-//        updateStatusSequence();
-//    }
-//
-//    private void updateStatusSequence() {
-//        for (Status status : workflow.getStatuses()) {
-//            for (FlowElement flowElement : process.getFlowElements()) {
-//                int id = Integer.parseInt(flowElement.getId().replaceAll("\\D+", ""));
-//                if (status.getNextStatusNumber() == id) {
-//                    List<Object> updatedNextStatuses = statusSequence.get(status.getStatusNumber());
-//                    updatedNextStatuses.add(flowElement);
-//                    if (updatedNextStatuses.size() >= 2 && updatedNextStatuses.stream().noneMatch(o -> o instanceof ExclusiveGateway)) {
-//                        ExclusiveGateway exclusiveGateway = createElement(process, "_" + status.getStatusNumber() + "_gateway", ExclusiveGateway.class);
-//                        exclusiveGateway.setName(status.getStatusDescription() + " gateway");
-//                        System.out.println("gateway created named " + exclusiveGateway.getName() + "with id " + exclusiveGateway.getId());
-//                        updatedNextStatuses.add(exclusiveGateway);
-//                    }
-//                    statusSequence.replace(status.getStatusNumber(), updatedNextStatuses);
-//                }
-//            }
-//        }
-//    }
-//
-//    private void initializeSequenceFlows(Process process) {
-//        for (FlowElement from : process.getFlowElements()) {
-//            int id = Integer.parseInt(from.getId().replaceAll("\\D+", ""));
-//            List<Object> nextStatuses = statusSequence.get(id);
-//            for (Object to : nextStatuses) {
-//                if (from instanceof StartEvent && to instanceof UserTask) {
-//                    createSequenceFlow(process, (StartEvent) from, (UserTask) to);
-//                } else if (from instanceof UserTask && to instanceof StartEvent) {
-//                    createSequenceFlow(process, (UserTask) from, (StartEvent) to);
-//                } else if (from instanceof StartEvent && to instanceof ExclusiveGateway) {
-//                    createSequenceFlow(process, (StartEvent) from, (ExclusiveGateway) to);
-//                } else if (from instanceof ExclusiveGateway && to instanceof StartEvent) {
-//                    createSequenceFlow(process, (ExclusiveGateway) from, (StartEvent) to);
-//                } else if (from instanceof EndEvent && to instanceof ExclusiveGateway) {
-//                    createSequenceFlow(process, (EndEvent) from, (ExclusiveGateway) to);
-//                } else if (from instanceof ExclusiveGateway && from instanceof EndEvent) {
-//                    createSequenceFlow(process, (ExclusiveGateway) from, (EndEvent) to);
-//                } else if (from instanceof UserTask && to instanceof EndEvent) {
-//                    createSequenceFlow(process, (UserTask) from, (EndEvent) to);
-//                } else if (from instanceof UserTask && to instanceof UserTask) {
-//                    createSequenceFlow(process, (UserTask) from, (UserTask) to);
-//                } else if (from instanceof UserTask && to instanceof ExclusiveGateway) {
-//                    createSequenceFlow(process, (UserTask) from, (ExclusiveGateway) to);
-//                } else if (from instanceof ExclusiveGateway && to instanceof UserTask) {
-//                    createSequenceFlow(process, (ExclusiveGateway) from, (UserTask) to);
-//                }
-//            }
-//        }
-//    }
-//
-//    private void writeModel(String modelName) {
-//        Bpmn.validateModel(modelInstance);
-//        try {
-//            Stream<Path> walk = Files.walk(Paths.get(path));
-//            walk.map(x -> x.toFile())
-//                    .filter(f -> f.getName().startsWith(modelName))
-//                    .collect(Collectors.toList())
-//                    .forEach(File::delete);
-//            File file = File.createTempFile(modelName, ".bpmn", new File(path));
-//            Bpmn.writeModelToStream();
-//            Bpmn.writeModelToFile(file, modelInstance);
-//        } catch (IOException io) {
-//            io.printStackTrace();
-//        }
-//    }
-//
-//
-//
-//    /**
-//     * A little helper method to simplify adding a element to current modelInstance
-//     *
-//     * @param parentElement
-//     * @param id
-//     * @param elementClass
-//     * @param <T>
-//     * @return <T>
-//     */
-//    private <T extends BpmnModelElementInstance> T createElement(BpmnModelElementInstance parentElement, String id, Class<T> elementClass) {
-//        T element = modelInstance.newInstance(elementClass);
-//        element.setAttributeValue("id", id, true);
-//        parentElement.addChildElement(element);
-//        return element;
-//    }
-//
-//    /**
-//     * method to create sequence flow
-//     *
-//     * @param process
-//     * @param from
-//     * @param to
-//     * @return
-//     */
-//    private SequenceFlow createSequenceFlow(Process process, FlowNode from, FlowNode to) {
-//        String identifier = from.getId() + "-" + to.getId();
-//        SequenceFlow sequenceFlow = createElement(process, identifier, SequenceFlow.class);
-//        process.addChildElement(sequenceFlow);
-//        sequenceFlow.setSource(from);
-//        from.getOutgoing().add(sequenceFlow);
-//        sequenceFlow.setTarget(to);
-//        to.getIncoming().add(sequenceFlow);
-//        return sequenceFlow;
-//    }
+    private void addOutGoingFlow(FlowElement flowElement, SequenceFlow outGoingFlow) {
+        List<SequenceFlow> flowElementSequence = new ArrayList<>();
+        flowElementSequence.add(outGoingFlow);
+        if(flowElement instanceof StartEvent) {
+            ((StartEvent) flowElement).setOutgoingFlows(flowElementSequence);
+        } else if (flowElement instanceof ExclusiveGateway) {
+            ((ExclusiveGateway) flowElement).setOutgoingFlows(flowElementSequence);
+        } else if (flowElement instanceof UserTask) {
+            ((UserTask) flowElement).setOutgoingFlows(flowElementSequence);
+        }
+    }
 
     @SafeVarargs
     private static <T> Predicate<T> distinctByKeys(Function<? super T, ?>... keyExtractors) {
@@ -456,6 +302,38 @@ public class BPMNModeller {
         }
         return false;
     }
+
+    private boolean containsExclusiveGateway(List<Object> objectList) {
+        for (Object object : objectList) {
+            if(object instanceof ExclusiveGateway) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean containsStartEvent(List<Object> objectList) {
+        for (Object object : objectList) {
+            if(object instanceof StartEvent) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean containsEndEvent(List<Object> objectList) {
+        for (Object object : objectList) {
+            if(object instanceof EndEvent) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+
+
+
+
 
 
 }
