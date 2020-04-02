@@ -61,7 +61,6 @@ public class BPMNModeller {
                 .collect(Collectors.toList());
         Map<Integer, Long> countSameStatuses = workflow.getStatuses().stream().collect(
                 Collectors.groupingBy(Status::getStatusNumber, Collectors.counting()));
-
         for (Status status : statusList) {
             long count = countSameStatuses.get(status.getStatusNumber());
             if(isStartEvent(status.getStatusNumber())) {
@@ -92,27 +91,22 @@ public class BPMNModeller {
             }
         }
         updateSequenceMap();
-
-
-
     }
 
     private void createSequences() {
         List<SequenceFlow> sequenceFlows = new ArrayList<>(); //list of incoming sequenceflows
-        System.out.println(statusSequence);
         for (Map.Entry<Integer, List<Object>> flowEntry : statusSequence.entrySet()) {
             FlowElement from = process.getFlowElement(Integer.toString(flowEntry.getKey()));
             List<Object> next_statuses = flowEntry.getValue();
-            if(containsExclusiveGateway(next_statuses)) {
+            if(next_statuses.stream().anyMatch(nx -> nx.getClass() == ExclusiveGateway.class)) {
                 try {
                     ExclusiveGateway toExclusiveGateway = (ExclusiveGateway)next_statuses.stream()
                             .filter(o -> o.getClass() == ExclusiveGateway.class)
                             .findAny().orElseThrow(() -> new ObjectNotFoundException("No exclusive gateway could be found"));
                     SequenceFlow sequenceFlowFromToExGw = createSequenceFlow(from.getId(), toExclusiveGateway.getId());
                     sequenceFlows.add(sequenceFlowFromToExGw);
-                    addOutGoingFlow(from, sequenceFlowFromToExGw); //from outgoing flow
+                    addOutGoingFlow(from, sequenceFlowFromToExGw);
 
-                    //set outgoing flows for gateway
                     List<SequenceFlow> gatewayOutgoingFlows = new ArrayList<>();
                     next_statuses.stream()
                             .filter(x -> !x.equals(toExclusiveGateway))
@@ -127,18 +121,18 @@ public class BPMNModeller {
                 } catch (ObjectNotFoundException e) {
                     e.printStackTrace();
                 }
-            } else if (containsStartEvent(next_statuses)) {
+            } else if (next_statuses.stream().anyMatch(nx -> nx.getClass() == StartEvent.class)) {
                 try {
                     StartEvent startEvent = (StartEvent) next_statuses.stream()
                             .filter(o -> o.getClass() == StartEvent.class)
                             .findAny()
                             .orElseThrow(() -> new ObjectNotFoundException("No startevent could be found in this list"));
-                    SequenceFlow sequenceFlowStartEventToFirstEvent = createSequenceFlow(startEvent.getId(), from.getId());//start event comes first
+                    SequenceFlow sequenceFlowStartEventToFirstEvent = createSequenceFlow(startEvent.getId(), from.getId());
                     sequenceFlows.add(sequenceFlowStartEventToFirstEvent);
                     addOutGoingFlow(startEvent, sequenceFlowStartEventToFirstEvent);
 
                     next_statuses.stream()
-                            .filter(x -> !x.equals(startEvent))
+                            .filter(x -> !x.equals(startEvent) && !x.equals(from))
                             .collect(Collectors.toList())
                             .forEach(o -> {
                                 FlowElement flowElement = (FlowElement)o;
@@ -150,7 +144,7 @@ public class BPMNModeller {
                     e.printStackTrace();
                 }
 
-            } else if (containsEndEvent(next_statuses)) {
+            } else if (next_statuses.stream().anyMatch(nx -> nx.getClass() == EndEvent.class)) {
                 try {
                     EndEvent endEvent = (EndEvent) next_statuses.stream()
                             .filter(o -> o.getClass() == EndEvent.class)
@@ -166,6 +160,7 @@ public class BPMNModeller {
                 next_statuses.forEach(o -> {
                     FlowElement flowElement = (FlowElement)o;
                     SequenceFlow sequenceFlowFromToFlowElement = createSequenceFlow(from.getId(), flowElement.getId());
+                    sequenceFlows.add(sequenceFlowFromToFlowElement);
                     addOutGoingFlow(from, sequenceFlowFromToFlowElement);
                 });
             }
@@ -203,7 +198,7 @@ public class BPMNModeller {
             resetModel();
             byte[] convertToXML = new BpmnXMLConverter().convertToXML(model);
             FileOutputStream fileOuputStream = new FileOutputStream(
-                    path + fileName + ".xml");
+                    path + fileName + ".bpmn");
             fileOuputStream.write(convertToXML);
             fileOuputStream.close();
             FileUtils.copyInputStreamToFile(
@@ -216,7 +211,7 @@ public class BPMNModeller {
 
     private void resetModel() throws IOException {
         String fileName = workflow.getProcessDescription().replaceAll(" ", "_");
-        File diagram = new File(path + fileName + ".xml");
+        File diagram = new File(path + fileName + ".bpmn");
         File picture = new File(path + fileName + ".png");
         FileUtils.cleanDirectory(new File(path));
         diagram.createNewFile();
@@ -302,38 +297,4 @@ public class BPMNModeller {
         }
         return false;
     }
-
-    private boolean containsExclusiveGateway(List<Object> objectList) {
-        for (Object object : objectList) {
-            if(object instanceof ExclusiveGateway) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private boolean containsStartEvent(List<Object> objectList) {
-        for (Object object : objectList) {
-            if(object instanceof StartEvent) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private boolean containsEndEvent(List<Object> objectList) {
-        for (Object object : objectList) {
-            if(object instanceof EndEvent) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-
-
-
-
-
-
 }
