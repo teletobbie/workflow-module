@@ -37,6 +37,4 @@ public class Workflow {
         }
         return null;
     }
-
-    public int getStatusesSize() { return statuses.size(); }
 }

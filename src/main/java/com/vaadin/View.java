@@ -6,11 +6,13 @@ import com.vaadin.annotations.VaadinServletConfiguration;
 import com.vaadin.data.Binder;
 import com.vaadin.data.ValidationException;
 import com.vaadin.data.converter.StringToIntegerConverter;
+import com.vaadin.server.FileResource;
 import com.vaadin.server.VaadinRequest;
 import com.vaadin.server.VaadinServlet;
 import com.vaadin.ui.*;
 
 import javax.servlet.annotation.WebServlet;
+import java.io.File;
 import java.util.ArrayList;
 
 /**
@@ -22,7 +24,7 @@ import java.util.ArrayList;
  */
 @Theme("mytheme")
 @JavaScript({"https://unpkg.com/bpmn-js@6.3.1/dist/bpmn-navigated-viewer.development.js", "https://unpkg.com/jquery@3.3.1/dist/jquery.js"})
-public class MyUI extends UI {
+public class View extends UI {
     private WorkflowService workflowService = WorkflowService.getInstance();
     private Workflow workFlow = new Workflow(0, "", new ArrayList<>());
     private Grid<Status> grid = new Grid<>(Status.class);
@@ -42,7 +44,7 @@ public class MyUI extends UI {
                 .bind(Workflow::getId, Workflow::setId);
         binder.readBean(workFlow);
 
-        HorizontalLayout main = new HorizontalLayout();
+        VerticalLayout main = new VerticalLayout();
 
         Button button = new Button("Go");
         button.addClickListener(e -> {
@@ -59,7 +61,7 @@ public class MyUI extends UI {
 
     }
 
-    private void updateWorkflow(HorizontalLayout layout) {
+    private void updateWorkflow(VerticalLayout layout) {
         try {
             workFlow = workflowService.getWorkflow(Integer.parseInt(processIdField.getValue()));
             if (workFlow != null) {
@@ -68,11 +70,23 @@ public class MyUI extends UI {
                 binder.writeBean(workFlow);
                 grid.setItems(workFlow.getStatuses());
 
-                CustomLayout content = new CustomLayout("canvas");
-                content.setSizeFull();
-                layout.addComponents(grid, content);
+                HorizontalLayout horizontalLayout = new HorizontalLayout();
 
-                renderBPMNDiagram();
+                CustomLayout content = new CustomLayout("canvas");
+                content.setId("canvas");
+                content.setSizeFull();
+                horizontalLayout.addComponents(grid, content);
+
+                renderBPMNDiagram(String.format("src/main/resources/%s.bpmn",
+                        workFlow.getProcessDescription().replace(" ", "_")));
+
+                FileResource imageResource = new FileResource(new File(
+                        String.format("src/main/resources/%s.png",
+                                workFlow.getProcessDescription().replace(" ", "_"))));
+                Image workflowImage = new Image(workFlow.getProcessDescription(), imageResource);
+
+                layout.addComponents(horizontalLayout, workflowImage);
+
             } else {
                 Notification.show("Workflow with " + processIdField.getValue() + " could not be found");
             }
@@ -81,10 +95,9 @@ public class MyUI extends UI {
         }
     }
 
-    private void renderBPMNDiagram() {
+    private void renderBPMNDiagram(String path) {
         com.vaadin.ui.JavaScript.getCurrent().execute("" +
                 "var diagramUrl = 'https://cdn.staticaly.com/gh/bpmn-io/bpmn-js-examples/dfceecba/starter/diagram.bpmn';\n" +
-                "console.warn(diagramUrl);" +
                 "      var bpmnViewer = new BpmnJS({\n" +
                 "        container: '#canvas'\n" +
                 "      });\n" +
@@ -103,7 +116,7 @@ public class MyUI extends UI {
 
 
     @WebServlet(urlPatterns = "/*", name = "MyUIServlet", asyncSupported = true)
-    @VaadinServletConfiguration(ui = MyUI.class, productionMode = false)
+    @VaadinServletConfiguration(ui = View.class, productionMode = false)
     public static class MyUIServlet extends VaadinServlet {
     }
 

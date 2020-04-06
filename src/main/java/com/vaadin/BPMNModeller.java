@@ -1,7 +1,5 @@
 package com.vaadin;
 
-
-
 import org.activiti.bpmn.BpmnAutoLayout;
 import org.activiti.bpmn.converter.BpmnXMLConverter;
 import org.activiti.bpmn.model.Process;
@@ -21,7 +19,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
-
 
 public class BPMNModeller {
     private final String path = "src/main/resources/";
@@ -287,7 +284,6 @@ public class BPMNModeller {
             database.start();
             ResultSet result = database.queryStatement(String.format(
                     "SELECT * FROM rainbow.status_tag WHERE STATUSNUMBER = %s;", statusNumber));
-
             if (result.next()) {
                 return true;
             }

@@ -24,24 +24,4 @@ public class Status {
     public int getNextStatusNumber() {
         return nextStatusNumber;
     }
-
-    public String getNextStatusDescription() {
-        return nextStatusDescription;
-    }
-
-    public void setStatusNumber(int statusNumber) {
-        this.statusNumber = statusNumber;
-    }
-
-    public void setStatusDescription(String statusDescription) {
-        this.statusDescription = statusDescription;
-    }
-
-    public void setNextStatusNumber(int nextStatusNumber) {
-        this.nextStatusNumber = nextStatusNumber;
-    }
-
-    public void setNextStatusDescription(String nextStatusDescription) {
-        this.nextStatusDescription = nextStatusDescription;
-    }
 }
