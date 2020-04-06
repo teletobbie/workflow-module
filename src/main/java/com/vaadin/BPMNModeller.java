@@ -93,7 +93,9 @@ public class BPMNModeller {
     private void createSequences() {
         List<SequenceFlow> sequenceFlows = new ArrayList<>(); //list of incoming sequenceflows
         for (Map.Entry<Integer, List<Object>> flowEntry : statusSequence.entrySet()) {
-            FlowElement from = process.getFlowElement(Integer.toString(flowEntry.getKey()));
+            System.out.println(flowEntry.getKey());
+            //FlowElement from = process.getFlowElement(Integer.toString(flowEntry.getKey()));
+            FlowElement from = process.getFlowElement(String.format("_%s", flowEntry.getKey()));
             List<Object> next_statuses = flowEntry.getValue();
             if(next_statuses.stream().anyMatch(nx -> nx.getClass() == ExclusiveGateway.class)) {
                 try {
@@ -103,7 +105,6 @@ public class BPMNModeller {
                     SequenceFlow sequenceFlowFromToExGw = createSequenceFlow(from.getId(), toExclusiveGateway.getId());
                     sequenceFlows.add(sequenceFlowFromToExGw);
                     addOutGoingFlow(from, sequenceFlowFromToExGw);
-
                     List<SequenceFlow> gatewayOutgoingFlows = new ArrayList<>();
                     next_statuses.stream()
                             .filter(x -> !x.equals(toExclusiveGateway))
@@ -127,7 +128,6 @@ public class BPMNModeller {
                     SequenceFlow sequenceFlowStartEventToFirstEvent = createSequenceFlow(startEvent.getId(), from.getId());
                     sequenceFlows.add(sequenceFlowStartEventToFirstEvent);
                     addOutGoingFlow(startEvent, sequenceFlowStartEventToFirstEvent);
-
                     next_statuses.stream()
                             .filter(x -> !x.equals(startEvent) && !x.equals(from))
                             .collect(Collectors.toList())
@@ -175,7 +175,7 @@ public class BPMNModeller {
         for (Status status : workflow.getStatuses()) {
             for (FlowElement flowElement : process.getFlowElements()) {
                 if(flowElement instanceof UserTask) {
-                    int id = Integer.parseInt(flowElement.getId());
+                    int id = Integer.parseInt(flowElement.getId().replaceAll("\\D+", ""));
                     if (status.getNextStatusNumber() == id) {
                         List<Object> updatedNextStatuses = statusSequence.get(status.getStatusNumber());
                         updatedNextStatuses.add(flowElement);
@@ -225,28 +225,28 @@ public class BPMNModeller {
 
     private StartEvent createStartEvent() {
         StartEvent startEvent = new StartEvent();
-        startEvent.setId("start");
+        startEvent.setId("_start");
         startEvent.setName("start");
         return startEvent;
     }
 
     private EndEvent createEndEvent() {
         EndEvent endEvent = new EndEvent();
-        endEvent.setId("end");
+        endEvent.setId("_end");
         endEvent.setName("end");
         return endEvent;
     }
 
     private UserTask createUserTask(int id, String name) {
         UserTask userTask = new UserTask();
-        userTask.setId(Integer.toString(id));
+        userTask.setId(String.format("_%s", id));
         userTask.setName(name);
         return userTask;
     }
 
     private ExclusiveGateway createExclusiveGateway(String id, String name) {
         ExclusiveGateway exclusiveGateway = new ExclusiveGateway();
-        exclusiveGateway.setId(id);
+        exclusiveGateway.setId(String.format("_%s", id));
         exclusiveGateway.setName(name);
         return exclusiveGateway;
     }
