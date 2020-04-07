@@ -65,6 +65,7 @@ public class View extends UI {
         try {
             workFlow = workflowService.getWorkflow(Integer.parseInt(processIdField.getValue()));
             if (workFlow != null) {
+
                 workflowService.createBPMNDiagram(workFlow);
 
                 binder.writeBean(workFlow);
