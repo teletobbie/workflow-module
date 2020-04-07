@@ -24,4 +24,6 @@ public class Status {
     public int getNextStatusNumber() {
         return nextStatusNumber;
     }
+
+    public String getNextStatusDescription() {return nextStatusDescription;}
 }

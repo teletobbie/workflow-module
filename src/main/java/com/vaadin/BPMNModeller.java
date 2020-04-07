@@ -93,8 +93,6 @@ public class BPMNModeller {
     private void createSequences() {
         List<SequenceFlow> sequenceFlows = new ArrayList<>(); //list of incoming sequenceflows
         for (Map.Entry<Integer, List<Object>> flowEntry : statusSequence.entrySet()) {
-            System.out.println(flowEntry.getKey());
-            //FlowElement from = process.getFlowElement(Integer.toString(flowEntry.getKey()));
             FlowElement from = process.getFlowElement(String.format("_%s", flowEntry.getKey()));
             List<Object> next_statuses = flowEntry.getValue();
             if(next_statuses.stream().anyMatch(nx -> nx.getClass() == ExclusiveGateway.class)) {
