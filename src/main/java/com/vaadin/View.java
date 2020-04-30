@@ -26,7 +26,7 @@ import java.util.ArrayList;
 @JavaScript({"https://unpkg.com/bpmn-js@6.3.1/dist/bpmn-navigated-viewer.development.js", "https://unpkg.com/jquery@3.3.1/dist/jquery.js"})
 public class View extends UI {
     private WorkflowService workflowService = WorkflowService.getInstance();
-    private Workflow workFlow = new Workflow(0, "", new ArrayList<>());
+    private Workflow workflow = new Workflow(0, "", new ArrayList<>());
     private Grid<Status> grid = new Grid<>(Status.class);
     private TextField processIdField = new TextField();
     private Binder<Workflow> binder = new Binder<>();
@@ -42,7 +42,7 @@ public class View extends UI {
                 .withConverter(new StringToIntegerConverter("Must be a number"))
                 .withNullRepresentation(0)
                 .bind(Workflow::getId, Workflow::setId);
-        binder.readBean(workFlow);
+        binder.readBean(workflow);
 
         VerticalLayout main = new VerticalLayout();
 
@@ -63,13 +63,12 @@ public class View extends UI {
 
     private void updateWorkflow(VerticalLayout layout) {
         try {
-            workFlow = workflowService.getWorkflow(Integer.parseInt(processIdField.getValue()));
-            if (workFlow != null) {
+            workflow = workflowService.getWorkflow(Integer.parseInt(processIdField.getValue()));
+            if (workflow != null) {
 
-                workflowService.createBPMNDiagram(workFlow);
-
-                binder.writeBean(workFlow);
-                grid.setItems(workFlow.getStatuses());
+                workflowService.createBPMNDiagram(workflow);
+                binder.writeBean(workflow);
+                grid.setItems(workflow.getStatuses());
 
                 HorizontalLayout horizontalLayout = new HorizontalLayout();
 
@@ -78,13 +77,14 @@ public class View extends UI {
                 content.setSizeFull();
                 horizontalLayout.addComponents(grid, content);
 
-                renderBPMNDiagram(String.format("src/main/resources/%s.bpmn",
-                        workFlow.getProcessDescription().replace(" ", "_")));
+                workflowService.getBlobUrl(workflow);
+
+                renderBPMNDiagram("https://cdn.staticaly.com/gh/bpmn-io/bpmn-js-examples/dfceecba/starter/diagram.bpmn"); //path = azure storage blob url
 
                 FileResource imageResource = new FileResource(new File(
                         String.format("src/main/resources/%s.png",
-                                workFlow.getProcessDescription().replace(" ", "_"))));
-                Image workflowImage = new Image(workFlow.getProcessDescription(), imageResource);
+                                workflow.getProcessDescription().replace(" ", "_"))));
+                Image workflowImage = new Image(workflow.getProcessDescription(), imageResource);
 
                 layout.addComponents(horizontalLayout, workflowImage);
 
@@ -98,7 +98,7 @@ public class View extends UI {
 
     private void renderBPMNDiagram(String path) {
         com.vaadin.ui.JavaScript.getCurrent().execute("" +
-                "var diagramUrl = 'https://cdn.staticaly.com/gh/bpmn-io/bpmn-js-examples/dfceecba/starter/diagram.bpmn';\n" +
+                "var diagramUrl = '"+path+"';\n" +
                 "      var bpmnViewer = new BpmnJS({\n" +
                 "        container: '#canvas'\n" +
                 "      });\n" +
@@ -114,7 +114,6 @@ public class View extends UI {
                 "      }\n" +
                 "      $.get(diagramUrl, openDiagram, 'text');");
     }
-
 
     @WebServlet(urlPatterns = "/*", name = "MyUIServlet", asyncSupported = true)
     @VaadinServletConfiguration(ui = View.class, productionMode = false)

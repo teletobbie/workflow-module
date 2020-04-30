@@ -1,10 +1,24 @@
 package com.vaadin;
 
+import com.azure.storage.blob.BlobClient;
+import com.azure.storage.blob.BlobContainerClient;
+import com.azure.storage.blob.BlobServiceClient;
+import com.azure.storage.blob.BlobServiceClientBuilder;
+import com.azure.storage.blob.models.BlobAccessPolicy;
+import com.azure.storage.blob.models.BlobSignedIdentifier;
+import com.azure.storage.blob.models.PublicAccessType;
+
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.NoSuchFileException;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 
+import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
 
 public class WorkflowService {
     private static WorkflowService instance;
@@ -59,5 +73,35 @@ public class WorkflowService {
         BPMNModeller bpmnModeller = new BPMNModeller(workflow);
         bpmnModeller.createModel();
         return bpmnModeller;
+    }
+
+    public String getBlobUrl(Workflow workflow) {
+        String connectionString ="DefaultEndpointsProtocol=https;AccountName=workflowmoduledemo;AccountKey=LobXYmy6ya8FseToLyC7Zxjk8T2cUWyFa5x87iPKVzheBNQo5obo7koQBYMR4fSil31fP93eWa0TCbP3d6FKhg==;EndpointSuffix=core.windows.net";
+        BlobServiceClient blobServiceClient = new BlobServiceClientBuilder().connectionString(connectionString).buildClient();
+        String containerName = "testblobs"+ UUID.randomUUID();
+
+
+        BlobSignedIdentifier identifier = new BlobSignedIdentifier()
+                .setId("name")
+                .setAccessPolicy(new BlobAccessPolicy()
+                        .setStartsOn(OffsetDateTime.now())
+                        .setExpiresOn(OffsetDateTime.now().plusDays(1))
+                        .setPermissions("r"));
+        BlobContainerClient containerClient = blobServiceClient.createBlobContainer(containerName);
+        try {
+            containerClient.setAccessPolicy(PublicAccessType.CONTAINER, Collections.singletonList(identifier));
+            System.out.println("Set access policy to read only.");
+        } catch (UnsupportedOperationException err) {
+            err.printStackTrace();
+        }
+
+        File file = new File(String.format("src/main/resources/%s.bpmn", workflow.getProcessDescription().replace(" ", "_")));
+
+        BlobClient blobClient = containerClient.getBlobClient(file.getName());
+
+        System.out.println("\nUploading to Blob storage as blob:\n\t" + blobClient.getBlobUrl());
+
+        blobClient.uploadFromFile(file.getAbsolutePath());
+        return blobClient.getBlobUrl();
     }
 }
